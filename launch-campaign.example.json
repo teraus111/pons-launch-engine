@@ -1,0 +1,48 @@
+{
+  "name": "atomic-v2-launch",
+  "mode": "launch-and-buy",
+  "protocols": ["v2"],
+  "target": {
+    "deployer": null,
+    "token": null
+  },
+  "wallets": [
+    {
+      "name": "Example Wallet - DO NOT FUND",
+      "strategy": "opening",
+      "enabled": true,
+      "exempt": true,
+      "order": 1
+    }
+  ],
+  "execution": {
+    "batchSize": 4,
+    "batchDelayMs": 50,
+    "confirmEachBatch": true,
+    "maxRetries": 2,
+    "retryDelayMs": 250
+  },
+  "launch": {
+    "creatorWallet": "Example Wallet - DO NOT FUND",
+    "initialBuyWallet": "Example Wallet - DO NOT FUND",
+    "launchConfigId": "0",
+    "pairToken": "native",
+    "creatorFeeRecipient": "0x7E5F4552091A69125d5DfCb7b8C2659029395Bdf",
+    "creatorTax": "0%",
+    "buybackEnabled": false,
+    "salt": "auto",
+    "token": {
+      "name": "Example Token",
+      "symbol": "EXMPL",
+      "logo": "ipfs://replace-me",
+      "description": "Replace this before launching.",
+      "socials": {
+        "twitter": "",
+        "telegram": "",
+        "discord": "",
+        "website": "",
+        "farcaster": ""
+      }
+    }
+  }
+}

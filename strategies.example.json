@@ -1,0 +1,39 @@
+{
+  "opening": {
+    "entry": {
+      "amount": "0.1",
+      "slippage": "auto",
+      "maxPriceImpact": "20%",
+      "maxSnipeTax": "0%",
+      "onPriceLimit": "resize",
+      "splitOrders": 1
+    },
+    "exit": {
+      "takeProfit": [
+        { "at": "2x", "sell": "25%" },
+        { "at": "4x", "sell": "50%" }
+      ],
+      "stopLoss": "50%",
+      "trailingStop": "20%",
+      "breakEvenAfter": "2x",
+      "maxHoldSeconds": null
+    }
+  },
+  "hold": {
+    "entry": {
+      "amount": "0.05",
+      "slippage": "3%",
+      "maxPriceImpact": "10%",
+      "maxSnipeTax": "3%",
+      "onPriceLimit": "skip",
+      "splitOrders": 1
+    },
+    "exit": {
+      "takeProfit": [],
+      "stopLoss": null,
+      "trailingStop": null,
+      "breakEvenAfter": null,
+      "maxHoldSeconds": null
+    }
+  }
+}

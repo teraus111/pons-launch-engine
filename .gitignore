@@ -1,0 +1,12 @@
+node_modules/
+dist/
+.env
+credentials.json
+credentials.vault.json
+campaign.json
+strategies.json
+state/
+*.db
+*.db-shm
+*.db-wal
+*.log

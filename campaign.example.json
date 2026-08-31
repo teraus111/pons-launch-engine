@@ -1,0 +1,25 @@
+{
+  "name": "my-own-launch",
+  "mode": "monitor",
+  "protocols": ["v1", "v2"],
+  "target": {
+    "deployer": "0x7E5F4552091A69125d5DfCb7b8C2659029395Bdf",
+    "token": null
+  },
+  "wallets": [
+    {
+      "name": "Example Wallet - DO NOT FUND",
+      "strategy": "opening",
+      "enabled": true,
+      "exempt": true,
+      "order": 1
+    }
+  ],
+  "execution": {
+    "batchSize": 4,
+    "batchDelayMs": 50,
+    "confirmEachBatch": true,
+    "maxRetries": 2,
+    "retryDelayMs": 250
+  }
+}

@@ -1,0 +1,40 @@
+{
+  "name": "pons-launch-engine",
+  "version": "2.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Durable own-launch execution engine for pons on Robinhood Chain",
+  "engines": {
+    "node": ">=22.5.0"
+  },
+  "license": "MIT",
+  "scripts": {
+    "dev": "tsx watch src/cli.ts run",
+    "start": "tsx src/cli.ts run",
+    "pons": "tsx src/cli.ts",
+    "doctor": "tsx src/cli.ts doctor",
+    "plan": "tsx src/cli.ts plan",
+    "launch": "tsx src/cli.ts launch",
+    "status": "tsx src/cli.ts status",
+    "resume": "tsx src/cli.ts resume",
+    "sell-all": "tsx src/cli.ts sell-all",
+    "vault": "tsx src/cli.ts vault",
+    "generate-wallets": "tsx src/tools/generateWallets.ts",
+    "verify": "tsx src/cli.ts doctor",
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "tsx --test test/**/*.test.ts"
+  },
+  "dependencies": {
+    "dotenv": "^17.2.3",
+    "pino": "^10.0.0",
+    "pino-pretty": "^13.1.2",
+    "viem": "^2.38.0",
+    "zod": "^4.1.12"
+  },
+  "devDependencies": {
+    "@types/node": "^24.7.1",
+    "tsx": "^4.20.6",
+    "typescript": "^5.9.3"
+  }
+}
