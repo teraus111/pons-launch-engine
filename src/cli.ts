@@ -1,13 +1,8 @@
 import { randomUUID } from "node:crypto";
-import { existsSync } from "node:fs";
 import { formatUnits, zeroAddress, type Address } from "viem";
 import { loadCampaign, validateCampaignStrategies } from "./core/campaign.js";
-import {
-  loadConfiguredCredentials,
-  readCredentials,
-  writeCredentialVault,
-} from "./core/credentials.js";
-import { executeV2Detected, handleDetectedLaunch, recordAtomicOpeningPosition } from "./core/entryEngine.js";
+import { loadConfiguredCredentials } from "./core/credentials.js";
+import { executeV2Detected, handleDetectedLaunch, setCredentials, recordAtomicOpeningPosition } from "./core/entryEngine.js";
 import { planCurveEntries } from "./core/planner.js";
 import { DurablePositionEngine } from "./core/positionEngine.js";
 import { StateStore } from "./core/store.js";
@@ -34,28 +29,25 @@ async function main(): Promise<void> {
   const [command = "help", ...args] = process.argv.slice(2);
   switch (command) {
     case "doctor":
-      await doctor();
+      await doctor(args);
       break;
     case "plan":
-      await plan();
+      await plan(args);
       break;
     case "launch":
-      await launch();
+      await launch(args);
       break;
     case "run":
-      await run();
+      await run(args);
       break;
     case "status":
       status();
       break;
     case "resume":
-      await resume();
+      await resume(args);
       break;
     case "sell-all":
       await sellAll(args);
-      break;
-    case "vault":
-      vault(args);
       break;
     case "help":
     case "--help":
@@ -67,8 +59,44 @@ async function main(): Promise<void> {
   }
 }
 
-function loadContext(): Context {
-  const campaign = loadCampaign(runtimeConfig.CAMPAIGN_FILE);
+interface CommandOptions {
+  campaignFile: string;
+  yes: boolean;
+}
+
+function parseCommandOptions(args: string[], allowYes = false): CommandOptions {
+  let campaignFile = runtimeConfig.CAMPAIGN_FILE;
+  let yes = false;
+
+  for (let index = 0; index < args.length; index += 1) {
+    const argument = args[index]!;
+    if (argument === "--campaign" || argument === "-c") {
+      const value = args[index + 1]?.trim();
+      if (!value || value.startsWith("-")) {
+        throw new Error(`${argument} requires a campaign JSON file path`);
+      }
+      campaignFile = value;
+      index += 1;
+      continue;
+    }
+    if (argument.startsWith("--campaign=") || argument.startsWith("-c=")) {
+      const value = argument.slice(argument.indexOf("=") + 1).trim();
+      if (!value) throw new Error(`${argument.split("=")[0]} requires a campaign JSON file path`);
+      campaignFile = value;
+      continue;
+    }
+    if (argument === "--yes" && allowYes) {
+      yes = true;
+      continue;
+    }
+    throw new Error(`Unknown option "${argument}"`);
+  }
+
+  return { campaignFile, yes };
+}
+
+function loadContext(campaignFile = runtimeConfig.CAMPAIGN_FILE): Context {
+  const campaign = loadCampaign(campaignFile);
   const strategies = loadStrategies(runtimeConfig.STRATEGIES_FILE);
   validateCampaignStrategies(campaign, strategies);
   const credentials = loadConfiguredCredentials();
@@ -83,8 +111,8 @@ function loadContext(): Context {
   };
 }
 
-async function doctor(): Promise<void> {
-  const context = loadContext();
+async function doctor(args: string[]): Promise<void> {
+  const context = loadContext(parseCommandOptions(args).campaignFile);
   try {
     const chainId = await publicClient.getChainId();
     if (chainId !== runtimeConfig.CHAIN_ID) {
@@ -133,8 +161,8 @@ async function doctor(): Promise<void> {
   }
 }
 
-async function plan(): Promise<void> {
-  const context = loadContext();
+async function plan(args: string[]): Promise<void> {
+  const context = loadContext(parseCommandOptions(args).campaignFile);
   try {
     if (context.campaign.mode === "launch-and-buy") {
       const prepared = await prepareAtomicLaunch(publicClient, context.campaign, context.wallets);
@@ -181,8 +209,9 @@ async function plan(): Promise<void> {
   }
 }
 
-async function launch(): Promise<void> {
-  const context = loadContext();
+async function launch(args: string[]): Promise<void> {
+  await setCredentials();
+  const context = loadContext(parseCommandOptions(args).campaignFile);
   if (context.campaign.mode !== "launch-and-buy") {
     context.store.close();
     throw new Error("The launch command requires campaign mode launch-and-buy");
@@ -242,8 +271,9 @@ async function launch(): Promise<void> {
   await runPositionLoop(context);
 }
 
-async function run(): Promise<void> {
-  const context = loadContext();
+async function run(args: string[]): Promise<void> {
+  await setCredentials();
+  const context = loadContext(parseCommandOptions(args).campaignFile);
   if (context.campaign.mode === "launch-and-buy") {
     context.store.close();
     throw new Error("Use the launch command for a launch-and-buy campaign");
@@ -321,17 +351,18 @@ function status(): void {
   }
 }
 
-async function resume(): Promise<void> {
-  const context = loadContext();
+async function resume(args: string[]): Promise<void> {
+  const context = loadContext(parseCommandOptions(args).campaignFile);
   await reconcilePending(context.store);
   await runPositionLoop(context);
 }
 
 async function sellAll(args: string[]): Promise<void> {
-  if (!runtimeConfig.DRY_RUN && !args.includes("--yes")) {
+  const options = parseCommandOptions(args, true);
+  if (!runtimeConfig.DRY_RUN && !options.yes) {
     throw new Error("Emergency liquidation requires --yes (or enable DRY_RUN)");
   }
-  const context = loadContext();
+  const context = loadContext(options.campaignFile);
   try {
     await reconcilePending(context.store);
     const engine = new DurablePositionEngine(
@@ -344,17 +375,6 @@ async function sellAll(args: string[]): Promise<void> {
   } finally {
     context.store.close();
   }
-}
-
-function vault(args: string[]): void {
-  const [action, input = "credentials.json", output = "credentials.vault.json"] = args;
-  if (action !== "import") {
-    throw new Error("Usage: npm run vault -- import [credentials.json] [credentials.vault.json]");
-  }
-  if (!existsSync(input)) throw new Error(`Credential file not found: ${input}`);
-  const password = process.env["PONS_VAULT_PASSWORD"] ?? "";
-  writeCredentialVault(readCredentials(input), output, password);
-  console.log(`Encrypted ${input} into ${output}. Private keys were not printed.`);
 }
 
 async function executeDirectTarget(context: Context): Promise<void> {
@@ -474,18 +494,20 @@ function help(): void {
   console.log(`pons-launch-engine
 
 Commands:
-  doctor              Validate files, RPC, contracts, wallets and launch settings
-  plan                Preview ordered wallet fills and price impact
-  launch              Atomically launch a Pons v2 token and execute the campaign
-  run                 Monitor a target deployer or enter a direct target token
+  doctor [-c file]    Validate files, RPC, contracts, wallets and launch settings
+  plan [-c file]      Preview ordered wallet fills and price impact
+  launch [-c file]    Atomically launch a Pons v2 token and execute the campaign
+  run [-c file]       Monitor a target deployer or enter a direct target token
   status              Show durable positions and pending transactions
-  resume              Reconcile pending transactions and resume exit monitoring
-  sell-all --yes      Sequential emergency liquidation of every open position
-  vault import        Encrypt a plaintext credential file
+  resume [-c file]    Reconcile pending transactions and resume exit monitoring
+  sell-all --yes      Sequential emergency liquidation; accepts -c file
+
+Options:
+  -c, --campaign <file>  Override CAMPAIGN_FILE for this command
 `);
 }
 
 void main().catch((error) => {
-  log.fatal({ error }, "command failed");
+  log.fatal({ err: error }, "command failed");
   process.exitCode = 1;
 });

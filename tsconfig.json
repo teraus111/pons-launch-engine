@@ -3,6 +3,7 @@
     "target": "ES2023",
     "lib": ["ES2023"],
     "module": "ESNext",
+    "types": ["node"],
     "moduleResolution": "bundler",
     "outDir": "dist",
     "rootDir": ".",

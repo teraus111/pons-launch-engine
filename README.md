@@ -6,8 +6,7 @@ supports Pons v1 and v2, controlled multi-wallet execution, persistent position
 tracking, and automated exits through the venue where the token currently
 trades.
 
-This is version 2 of the application. “Pons v1” and “Pons v2” below refer to
-the two protocol generations, not the application version.
+(“Pons v1” and “Pons v2” below refer to the two protocol generations, not the application version.)
 
 ## Features
 
@@ -29,8 +28,8 @@ the two protocol generations, not the application version.
   v4 after graduation.
 - Persists launches, transactions, positions, triggered rules, and campaign
   runs in SQLite so monitoring can resume after a restart.
-- Keeps wallet keys in a local gitignored file or an AES-256-GCM encrypted
-  credential vault. Keys are never printed by the included tools.
+- Keeps wallet keys in a local gitignored credentials file. Keys are never
+  printed by the included tools.
 
 | Pons generation | Entry venue | Opening behavior | Exit venue |
 | --- | --- | --- | --- |
@@ -42,18 +41,20 @@ the two protocol generations, not the application version.
 - Node.js `22.5.0` or newer
 - A dedicated Robinhood Chain RPC provider with HTTP and preferably WebSocket
   endpoints
+- Alchemy for RPC provider (free account)
 - Dedicated wallets funded only with assets you can afford to lose
 
 ## Installation
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/pons-launch-engine.git
+git clone https://github.com/slightlyuseless/pons-launch-engine.git
 cd pons-launch-engine
 npm install
 cp .env.example .env
 cp credentials.example.json credentials.json
 cp strategies.example.json strategies.json
 cp campaign.example.json campaign.json
+cp launch-campaign.example.json launch-campaign.json
 ```
 
 On PowerShell, replace `cp` with `Copy-Item`.
@@ -90,16 +91,6 @@ npm run generate-wallets -- 5
 
 Generated names start at `Wallet 1` and skip every existing name. Private keys
 are written only to the configured credentials file and are not printed.
-
-For encrypted-at-rest credentials, set a password of at least 12 characters
-and import the plaintext file:
-
-```bash
-PONS_VAULT_PASSWORD="a-long-unique-password" npm run vault -- import credentials.json credentials.vault.json
-```
-
-Then set `CREDENTIALS_VAULT_FILE` and `PONS_VAULT_PASSWORD` in `.env`. Move or
-securely delete the plaintext file only after verifying the vault works.
 
 ## Strategies
 
@@ -153,6 +144,62 @@ Use [campaign.example.json](campaign.example.json) for monitoring and
 [launch-campaign.example.json](launch-campaign.example.json) for an atomic v2
 launch. The example credential is public test data and must never be funded.
 
+`CAMPAIGN_FILE` in `.env` remains the default for campaign-aware commands. To
+select a file for one command, use `--campaign <file>` or `-c <file>`. npm needs
+its own `--` separator before flags passed to the engine:
+
+```bash
+npm run doctor -- --campaign launch-campaign.json
+npm run plan -- --campaign launch-campaign.json
+npm run launch
+```
+
+`npm run launch` selects `launch-campaign.json` automatically. Override it when
+using a differently named launch file:
+
+```bash
+npm run launch -- --campaign my-launch.json
+```
+
+For a monitoring or direct-token campaign:
+
+```bash
+npm start -- --campaign campaign.json
+```
+
+### Uploading launch metadata with Pinata
+
+To create a token programmatically, off-chain assets referenced by its metadata
+must be uploaded to an IPFS service. A local image path is only meaningful on
+your computer and cannot be used as the token's public logo. Pons stores the
+other supplied metadata onchain; the engine uploads the local logo and places
+the resulting `ipfs://CID` in the launch transaction.
+
+The launch example supports [Pinata IPFS](https://pinata.cloud/):
+
+1. Create a free Pinata account.
+2. Create an API key with public file-upload permission and copy its JWT.
+3. Paste the JWT into your local `.env` file. Never put it in campaign JSON or
+   commit it to Git.
+
+```dotenv
+PINATA_JWT=YOUR_PINATA_JWT
+```
+
+4. Set the image path in `launch-campaign.json`, relative to that campaign
+   file:
+
+```json
+"logoFile": "./assets/token-logo.png"
+```
+
+PNG, JPEG, GIF, WebP, and SVG files up to 10 MB are accepted. `doctor` and
+`plan` validate the local file. A real `launch` uploads it to Pinata's public
+IPFS and uses the returned URI; a dry run does not upload anything.
+
+If the image is already hosted on IPFS, use `"logo": "ipfs://..."` instead.
+Set exactly one of `logoFile` or `logo`.
+
 Pons v2 supports at most 32 explicit exemption addresses. The first 32 campaign
 wallets with `exempt: true` are included in execution order, excluding addresses
 the protocol exempts automatically. Atomic-campaign `doctor` and `plan` output
@@ -165,15 +212,15 @@ rather than paying the opening tax.
 
 | Command | Purpose |
 | --- | --- |
-| `npm run doctor` | Validate files, RPC chain, deployed contracts, wallets, and launch settings |
-| `npm run plan` | Preview ordered spends, expected fills, impact, resizing, and skipped entries |
-| `npm run launch` | Execute an atomic Pons v2 launch-and-buy campaign |
-| `npm start` | Monitor a deployer or enter a direct target token |
+| `npm run doctor -- --campaign <file>` | Validate files, RPC chain, deployed contracts, wallets, and settings for one campaign |
+| `npm run plan -- --campaign <file>` | Preview ordered spends, expected fills, impact, resizing, and skipped entries for one campaign |
+| `npm run launch` | Execute `launch-campaign.json` as an atomic Pons v2 launch-and-buy campaign |
+| `npm run launch -- --campaign <file>` | Execute a differently named atomic launch campaign |
+| `npm start -- --campaign <file>` | Monitor a deployer or enter a direct target token using that campaign |
 | `npm run status` | Show durable open positions and pending transactions |
-| `npm run resume` | Reconcile pending receipts and resume exit monitoring |
-| `npm run sell-all -- --yes` | Sequentially liquidate every open position |
+| `npm run resume -- --campaign <file>` | Reconcile pending receipts and resume exit monitoring |
+| `npm run sell-all -- --yes --campaign <file>` | Sequentially liquidate every open position |
 | `npm run generate-wallets -- 5` | Append five locally generated wallets |
-| `npm run vault -- import ...` | Encrypt a plaintext credential file |
 | `npm test` | Run the local test suite |
 | `npm run typecheck` | Check TypeScript without emitting files |
 
@@ -195,9 +242,6 @@ not replace wallet ownership; it records what the engine knows about its work.
 
 ## Safety
 
-- Never commit `.env`, `credentials.json`, credential vaults, campaign files
-  containing operational details, or state databases.
-- `DRY_RUN=false` can send irreversible transactions.
 - Later wallets can land later. V2 curve entries are serialized and requoted;
   v1 bounds account for sibling orders before its restricted-block batches.
   Neither path can guarantee sequencer ordering or execution.
@@ -210,7 +254,7 @@ not replace wallet ownership; it records what the engine knows about its work.
 - The software is unaudited and independent of Pons, Uniswap, and Robinhood.
 
 Read [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the component and state
-model, and [SECURITY.md](SECURITY.md) for key-handling guidance.
+model.
 
 ## License
 

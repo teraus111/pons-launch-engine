@@ -2,7 +2,6 @@ node_modules/
 dist/
 .env
 credentials.json
-credentials.vault.json
 campaign.json
 strategies.json
 state/

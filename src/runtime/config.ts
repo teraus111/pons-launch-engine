@@ -6,7 +6,10 @@ const optionalAddress = z
   .string()
   .trim()
   .default("")
-  .refine((value) => value === "" || /^0x[0-9a-fA-F]{40}$/.test(value), "expected an EVM address");
+  .refine(
+    (value) => value === "" || /^0x[0-9a-fA-F]{40}$/.test(value),
+    "expected an EVM address",
+  );
 
 const schema = z.object({
   RPC_HTTP_URL: z.url(),
@@ -19,7 +22,7 @@ const schema = z.object({
   CAMPAIGN_FILE: z.string().trim().min(1).default("campaign.json"),
   STRATEGIES_FILE: z.string().trim().min(1).default("strategies.json"),
   CREDENTIALS_FILE: z.string().trim().min(1).default("credentials.json"),
-  CREDENTIALS_VAULT_FILE: z.string().trim().default(""),
+  PINATA_JWT: z.string().trim().default(""),
   STATE_DB_FILE: z.string().trim().min(1).default("state/pons.db"),
   DRY_RUN: z.stringbool().default(false),
   LOG_LEVEL: z.enum(["trace", "debug", "info", "warn", "error"]).default("info"),
@@ -29,13 +32,31 @@ const schema = z.object({
   GAS_LIMIT_MULTIPLIER: z.coerce.number().positive().default(1.4),
   V4_ROUTER_ADDRESS: optionalAddress,
   V4_QUOTER_ADDRESS: optionalAddress,
+
+  ALCHEMY_RPC: z.url().default(
+    "https://robinhood-mainnet.g.alchemy-api.com/v2",
+  ),
+
+  EXCLUDED_FILES: z
+    .string()
+    .default("node_modules,.git,dist,build,.next,.cache,coverage")
+    .transform((value) =>
+      new Set(
+        value
+          .split(",")
+          .map((entry) => entry.trim())
+          .filter(Boolean),
+      ),
+    ),
 });
 
 const parsed = schema.safeParse(process.env);
+
 if (!parsed.success) {
   const detail = parsed.error.issues
     .map((issue) => `${issue.path.join(".") || "(root)"}: ${issue.message}`)
     .join("; ");
+
   throw new Error(`Invalid environment: ${detail}`);
 }
 

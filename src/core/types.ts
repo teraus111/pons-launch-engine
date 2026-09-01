@@ -79,7 +79,8 @@ export interface AtomicLaunchConfig {
   token: {
     name: string;
     symbol: string;
-    logo: string;
+    logo: string | null;
+    logoFile: string | null;
     description: string;
     socials: TokenSocials;
   };

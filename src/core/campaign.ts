@@ -1,4 +1,5 @@
 import { readFileSync } from "node:fs";
+import { dirname, resolve } from "node:path";
 import { getAddress, zeroAddress, type Address, type Hex } from "viem";
 import { z } from "zod";
 import type { Campaign, StrategyProfile } from "./types.js";
@@ -14,6 +15,33 @@ const addressSchema = z
 const nullableAddressSchema = addressSchema.nullable().default(null);
 const hex32Schema = z.string().regex(/^0x[0-9a-fA-F]{64}$/).transform((value) => value as Hex);
 
+const launchTokenSchema = z
+  .object({
+    name: z.string().trim().min(1).max(128),
+    symbol: z.string().trim().min(1).max(32),
+    logo: z.string().trim().min(1).optional(),
+    logoFile: z.string().trim().min(1).optional(),
+    description: z.string().trim().max(2_000).default(""),
+    socials: z
+      .object({
+        twitter: z.string().trim().default(""),
+        telegram: z.string().trim().default(""),
+        discord: z.string().trim().default(""),
+        website: z.string().trim().default(""),
+        farcaster: z.string().trim().default(""),
+      })
+      .strict(),
+  })
+  .strict()
+  .superRefine((token, context) => {
+    if (Boolean(token.logo) === Boolean(token.logoFile)) {
+      context.addIssue({
+        code: "custom",
+        message: "set exactly one of logo or logoFile",
+      });
+    }
+  });
+
 const launchSchema = z
   .object({
     creatorWallet: z.string().trim().min(1),
@@ -24,23 +52,7 @@ const launchSchema = z
     creatorTax: z.string().trim(),
     buybackEnabled: z.boolean().default(false),
     salt: z.union([z.literal("auto"), hex32Schema]).default("auto"),
-    token: z
-      .object({
-        name: z.string().trim().min(1).max(128),
-        symbol: z.string().trim().min(1).max(32),
-        logo: z.string().trim().min(1),
-        description: z.string().trim().max(2_000).default(""),
-        socials: z
-          .object({
-            twitter: z.string().trim().default(""),
-            telegram: z.string().trim().default(""),
-            discord: z.string().trim().default(""),
-            website: z.string().trim().default(""),
-            farcaster: z.string().trim().default(""),
-          })
-          .strict(),
-      })
-      .strict(),
+    token: launchTokenSchema,
   })
   .strict();
 
@@ -134,7 +146,13 @@ export function loadCampaign(path = process.env["CAMPAIGN_FILE"]?.trim() || "cam
         creatorTaxBps: parsePercentBps(stored.launch.creatorTax, "launch.creatorTax"),
         buybackEnabled: stored.launch.buybackEnabled,
         salt: stored.launch.salt,
-        token: stored.launch.token,
+        token: {
+          ...stored.launch.token,
+          logo: stored.launch.token.logo ?? null,
+          logoFile: stored.launch.token.logoFile
+            ? resolve(dirname(resolve(path)), stored.launch.token.logoFile)
+            : null,
+        },
       }
     : null;
 

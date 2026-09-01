@@ -12,9 +12,11 @@ import type { Campaign } from "../core/types.js";
 import type { RuntimeWallet } from "../core/wallets.js";
 import { explicitV2Exemptions, requireWallet } from "../core/wallets.js";
 import { parseAssetAmount, redactError } from "../core/values.js";
+import { resolveLaunchLogo, validateLaunchLogo } from "../core/logo.js";
 import type { StateStore } from "../core/store.js";
 import { robinhoodChain } from "../runtime/chain.js";
 import { runtimeConfig } from "../runtime/config.js";
+import { log } from "../runtime/logger.js";
 import {
   PONS_V2,
   erc20Abi,
@@ -58,6 +60,7 @@ export async function prepareAtomicLaunch(
 ): Promise<PreparedAtomicLaunch> {
   if (!campaign.launch) throw new Error("Campaign does not define an atomic launch");
   const launch = campaign.launch;
+  validateLaunchLogo(launch.token);
   const creator = requireWallet(wallets, launch.creatorWallet);
   const recipient = requireWallet(wallets, launch.initialBuyWallet);
   const pairToken = launch.pairToken === "native" ? zeroAddress : launch.pairToken;
@@ -189,10 +192,20 @@ export async function executeAtomicLaunch(
   prepared: PreparedAtomicLaunch,
 ): Promise<AtomicLaunchResult | null> {
   const launch = prepared.campaign.launch!;
+  if (launch.token.logoFile && !runtimeConfig.DRY_RUN) {
+    log.info({ file: launch.token.logoFile }, "uploading launch logo to Pinata public IPFS");
+  }
+  const logo = await resolveLaunchLogo(launch.token, {
+    dryRun: runtimeConfig.DRY_RUN,
+    pinataJwt: runtimeConfig.PINATA_JWT,
+  });
+  if (launch.token.logoFile && !runtimeConfig.DRY_RUN) {
+    log.info({ logo }, "launch logo uploaded to IPFS");
+  }
   const params = {
     name: launch.token.name,
     symbol: launch.token.symbol,
-    logo: launch.token.logo,
+    logo,
     description: launch.token.description,
     socials: launch.token.socials,
     creatorFeeRecipient: launch.creatorFeeRecipient,

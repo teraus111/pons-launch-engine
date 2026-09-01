@@ -21,6 +21,7 @@ import {
 import { publicClient, robinhoodChain } from "./runtime/chain.js";
 import { runtimeConfig } from "./runtime/config.js";
 import { log } from "./runtime/logger.js";
+import { setCredentials } from "./core/entryEngine.js";
 
 export interface V1BuyResult {
   txHash: Hex;

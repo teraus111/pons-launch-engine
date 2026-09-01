@@ -1,28 +1,13 @@
 import assert from "node:assert/strict";
-import { mkdtempSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 import test from "node:test";
 import { privateKeyToAccount } from "viem/accounts";
-import {
-  generateCredentialEntries,
-  readCredentialVault,
-  writeCredentialVault,
-} from "../src/core/credentials.js";
+import { generateCredentialEntries } from "../src/core/credentials.js";
 
 const credential = {
   name: "Example",
   privateKey: "0x0000000000000000000000000000000000000000000000000000000000000001" as const,
   publicKey: "0x7E5F4552091A69125d5DfCb7b8C2659029395Bdf" as const,
 };
-
-test("credential vault encrypts and authenticates its payload", () => {
-  const directory = mkdtempSync(join(tmpdir(), "pons-vault-"));
-  const path = join(directory, "credentials.vault.json");
-  writeCredentialVault([credential], path, "correct horse battery staple");
-  assert.deepEqual(readCredentialVault(path, "correct horse battery staple"), [credential]);
-  assert.throws(() => readCredentialVault(path, "this password is wrong"), /Could not decrypt/);
-});
 
 test("wallet generation preserves existing names and fills unused Wallet numbers", () => {
   const thirdKey = "0x0000000000000000000000000000000000000000000000000000000000000003" as const;

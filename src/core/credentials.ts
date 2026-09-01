@@ -1,10 +1,4 @@
-import {
-  createCipheriv,
-  createDecipheriv,
-  randomBytes,
-  scryptSync,
-} from "node:crypto";
-import { chmodSync, existsSync, readFileSync, writeFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { getAddress, type Address, type Hex } from "viem";
 import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
 import { z } from "zod";
@@ -18,22 +12,6 @@ const credentialSchema = z
   })
   .strict();
 
-const vaultSchema = z
-  .object({
-    version: z.literal(1),
-    kdf: z.literal("scrypt"),
-    cipher: z.literal("aes-256-gcm"),
-    salt: z.string().min(1),
-    iv: z.string().min(1),
-    tag: z.string().min(1),
-    ciphertext: z.string().min(1),
-  })
-  .strict();
-
-type VaultEnvelope = z.infer<typeof vaultSchema>;
-
-const AAD = Buffer.from("pons-launch-engine:credentials:v1", "utf8");
-
 export function readCredentials(path: string): StoredWalletCredential[] {
   let value: unknown;
   try {
@@ -44,75 +22,7 @@ export function readCredentials(path: string): StoredWalletCredential[] {
   return validateCredentials(value, path);
 }
 
-export function readCredentialVault(path: string, password: string): StoredWalletCredential[] {
-  if (password.length < 12) throw new Error("PONS_VAULT_PASSWORD must contain at least 12 characters");
-
-  let value: unknown;
-  try {
-    value = JSON.parse(readFileSync(path, "utf8"));
-  } catch (error) {
-    throw new Error(`Could not read ${path}: ${error instanceof Error ? error.message : String(error)}`);
-  }
-
-  const envelope = vaultSchema.safeParse(value);
-  if (!envelope.success) throw new Error(`${path} is not a supported credential vault`);
-
-  try {
-    const salt = Buffer.from(envelope.data.salt, "base64");
-    const iv = Buffer.from(envelope.data.iv, "base64");
-    const tag = Buffer.from(envelope.data.tag, "base64");
-    const ciphertext = Buffer.from(envelope.data.ciphertext, "base64");
-    const key = scryptSync(password, salt, 32);
-    const decipher = createDecipheriv("aes-256-gcm", key, iv);
-    decipher.setAAD(AAD);
-    decipher.setAuthTag(tag);
-    const plaintext = Buffer.concat([decipher.update(ciphertext), decipher.final()]).toString("utf8");
-    return validateCredentials(JSON.parse(plaintext) as unknown, path);
-  } catch {
-    throw new Error(`Could not decrypt ${path}; check PONS_VAULT_PASSWORD`);
-  }
-}
-
-export function writeCredentialVault(
-  credentials: StoredWalletCredential[],
-  path: string,
-  password: string,
-): void {
-  if (password.length < 12) throw new Error("Vault password must contain at least 12 characters");
-  const validated = validateCredentials(credentials, "credentials");
-  const salt = randomBytes(32);
-  const iv = randomBytes(12);
-  const key = scryptSync(password, salt, 32);
-  const cipher = createCipheriv("aes-256-gcm", key, iv);
-  cipher.setAAD(AAD);
-  const ciphertext = Buffer.concat([
-    cipher.update(JSON.stringify(validated), "utf8"),
-    cipher.final(),
-  ]);
-  const envelope: VaultEnvelope = {
-    version: 1,
-    kdf: "scrypt",
-    cipher: "aes-256-gcm",
-    salt: salt.toString("base64"),
-    iv: iv.toString("base64"),
-    tag: cipher.getAuthTag().toString("base64"),
-    ciphertext: ciphertext.toString("base64"),
-  };
-  writeFileSync(path, `${JSON.stringify(envelope, null, 2)}\n`, { encoding: "utf8", mode: 0o600 });
-  try {
-    chmodSync(path, 0o600);
-  } catch {
-    // Windows does not implement POSIX modes; the file remains gitignored.
-  }
-}
-
 export function loadConfiguredCredentials(): StoredWalletCredential[] {
-  const vaultPath = process.env["CREDENTIALS_VAULT_FILE"]?.trim();
-  if (vaultPath) {
-    if (!existsSync(vaultPath)) throw new Error(`Credential vault not found: ${vaultPath}`);
-    const password = process.env["PONS_VAULT_PASSWORD"] ?? "";
-    return readCredentialVault(vaultPath, password);
-  }
   const path = process.env["CREDENTIALS_FILE"]?.trim() || "credentials.json";
   return readCredentials(path);
 }

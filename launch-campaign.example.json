@@ -34,7 +34,7 @@
     "token": {
       "name": "Example Token",
       "symbol": "EXMPL",
-      "logo": "ipfs://replace-me",
+      "logoFile": "./assets/token-logo.png",
       "description": "Replace this before launching.",
       "socials": {
         "twitter": "",

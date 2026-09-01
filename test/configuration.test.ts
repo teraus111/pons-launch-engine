@@ -15,4 +15,5 @@ test("published configuration examples validate together", () => {
   assert.equal(credentials[0]?.name, monitor.wallets[0]?.name);
   assert.equal(credentials[0]?.name, launch.launch?.creatorWallet);
   assert.equal(launch.mode, "launch-and-buy");
+  assert.match(launch.launch?.token.logoFile ?? "", /assets[\\/]token-logo\.png$/);
 });
